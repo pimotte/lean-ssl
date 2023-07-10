@@ -1,16 +1,17 @@
 import Http.Types
 import Http.Headers
 import Http.Parsec
+import Lean.Data.Parsec
 
 namespace Http.Response
 
 namespace Parser
-open Http.Headers Parsec
+open Lean Http.Headers Lean.Parsec Http.Parsec
 
 def protocol : Parsec Protocol := do
-  let name ← many1Chars asciiLetter
+  let name ← Http.Parsec.many1Chars asciiLetter
   skipChar '/'
-  let version ← many1Chars (digit <|> pchar '.')
+  let version ← Http.Parsec.many1Chars (digit <|> pchar '.')
   match name with
   | "HTTP" => return Protocol.http version
   | "HTTPS" => return Protocol.https version
@@ -24,7 +25,7 @@ def response : Parsec Response := do
   ws
   let statusCode ← digitsToNat <$> many1 digitNat
   ws
-  let message ← manyChars <| satisfy (λ c => c != '\n')
+  let message ← Http.Parsec.manyChars <| satisfy (λ c => c != '\n')
   ws
   let headers ← Parser.headers
   let body ← rest
@@ -38,6 +39,6 @@ def response : Parsec Response := do
 
 end Parser
 
-def parse (s : String) : Except String Response := Parser.response.parse s
+def parse (s : String) : Except String Response := Http.Parsec.parse Http.Response.Parser.response s
 
 end Http.Response

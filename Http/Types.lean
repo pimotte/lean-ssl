@@ -1,4 +1,6 @@
 import Lean
+import Std.Data.HashMap
+
 namespace Http
 
 namespace URI

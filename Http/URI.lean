@@ -3,7 +3,7 @@ import Http.Parsec
 import Http.Types
 import Socket
 
-open Std Parsec Socket
+open Std Lean.Parsec Socket Http.Parsec Lean
 
 namespace Http
 
@@ -27,42 +27,20 @@ instance : ToString URI := ⟨toString⟩
 namespace Parser
 
 def schemeParser : Parsec Scheme :=
-  Scheme.mk <$> manyChars (asciiLetter <|> oneOf ['+', '-', '.'])
+  Scheme.mk <$> Http.Parsec.manyChars (asciiLetter <|> oneOf ['+', '-', '.'])
 
 def hostName : Parsec Hostname := do
-  let name := many1Chars (asciiLetter <|> digit <|> pchar '-')
+  let name := Http.Parsec.many1Chars (asciiLetter <|> digit <|> pchar '-')
   let start := name ++ pstring "."
   many1Strings start ++ name
-
-def parseDigit! (c : Char) : Nat :=
-  match c with
-  | '0' => 0
-  | '1' => 1
-  | '2' => 2
-  | '3' => 3
-  | '4' => 4
-  | '5' => 5
-  | '6' => 6
-  | '7' => 7
-  | '8' => 8
-  | '9' => 9
-  | _ => panic! "Not a digit"
-
-def parseUInt16 : Parsec UInt16 := do
-  let as ← many1 digit
-  let mut n := 0
-  for (i, c) in as.toList.reverse.enum do
-    let d := parseDigit! c
-    n := n + d * 10 ^ i
-  return n.toUInt16
 
 def maybePort : Parsec (Option UInt16) := do
   option $ parseUInt16
 
-def psegment : Parsec String :=
-  many1Chars <| oneOf ['-', '%', '_', '+', '$', '.', ':', '*', '@' ] <|> asciiLetter <|> digit
+def psegment : Lean.Parsec String :=
+  Http.Parsec.many1Chars <| oneOf ['-', '%', '_', '+', '$', '.', ':', '*', '@' ] <|> asciiLetter <|> digit
 
-partial def pathParser : Parsec Path := do
+partial def pathParser : Lean.Parsec Path := do
   let rec comp : Parsec Path := do
     if ← test <| pstring "/" then
       let part ← psegment
@@ -72,13 +50,13 @@ partial def pathParser : Parsec Path := do
       pure []
   comp
 
-def userInfoParser : Parsec UserInfo := do
-  let username ← many1Chars <| asciiLetter <|> digit
-  let password ← option do skipChar ':'; many1Chars <| asciiLetter <|> digit
+def userInfoParser : Lean.Parsec UserInfo := do
+  let username ← Http.Parsec.many1Chars <| asciiLetter <|> digit
+  let password ← option do skipChar ':'; Http.Parsec.many1Chars <| asciiLetter <|> digit
   skipChar '@'
   return { username, password : UserInfo }
 
-partial def queryParser : Parsec Query := do
+partial def queryParser : Lean.Parsec Query := do
   skipChar '?'
   let rec entries := do
     let k ← psegment
@@ -90,7 +68,7 @@ partial def queryParser : Parsec Query := do
       pure [(k, v)]
   entries
 
-partial def fragmentParser : Parsec Fragment := do
+partial def fragmentParser : Lean.Parsec Fragment := do
   skipChar '#'
   let rec entries := do
     let k ← psegment
@@ -115,7 +93,7 @@ def url : Parsec URI := do
 
 end Parser
 
-def parse (s : String) : Except String URI := Parser.url.parse s
+def parse (s : String) : Except String URI := Http.Parsec.parse Http.URI.Parser.url s
 
 end URI
 end Http

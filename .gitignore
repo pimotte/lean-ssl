@@ -1,4 +1,6 @@
 *.olean
 result*
 lean_packages
+lake-packages
+lake-manifest.json
 build

@@ -3,16 +3,19 @@ open Lake DSL
 
 package Http
 
-@[defaultTarget]
+@[default_target]
 lean_exe http {
   root := `Main
 }
 
-@[defaultTarget]
+@[default_target]
 lean_lib Http
 
 require Socket from git
-  "https://github.com/yatima-inc/Socket.lean" @ "c47fe71cde6b79a40903563cc56c0889bd5ca220"
+  "https://github.com/xubaiw/lean4-socket.git" @ "main"
+
+require Std from git
+  "https://github.com/leanprover/std4/" @ "main"
 
 -- require OpenSSL from git
 --   "https://github.com/yatima-inc/OpenSSL.lean" @ "7187dab2f60097194167dbfa5afd862c276f4cd7"

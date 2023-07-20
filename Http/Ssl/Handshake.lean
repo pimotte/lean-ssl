@@ -35,15 +35,8 @@ def ineq_lemma (n p : Nat) : p ≤ (.succ n) * p := by
     exact Nat.add_le_add ihp (Nat.pos_of_ne_zero (by simp))
   }
 
-def nat_lemma : Nat.succ m * p - p = m * p := by 
-  induction p with
-  | zero => simp
-  | succ p' ihp => {
-    rw [Nat.mul_succ, Nat.succ_mul, Nat.mul_succ, ← ihp]
+def nat_lemma : Nat.succ m * p - p = m * p := by simp_arith [Nat.succ_mul, Nat.add_mul]
     
-  }
-
-
 def Vector.take (h : n ≤ m) (as : Vector α m) : Vector α n :=
   let ⟨ asl , aslh ⟩ := as
   let taken := asl.take n
@@ -62,13 +55,18 @@ def Vector.fromBytes [FromBytes α p] : Vector UInt8 (m * p) → Except String (
   | (.succ m) => 
     match ((FromBytes.fromBytes (Vector.take (ineq_lemma _ _) as)) : Except String α) with
     | .ok a => 
-      match Vector.fromBytes (Vector.drop (ineq_lemma _ _) as) with
+      match Vector.fromBytes (nat_lemma ▸ Vector.drop (ineq_lemma _ _) as) with
       | .ok ⟨ as , ash ⟩ => Except.ok (⟨a :: as, ash ▸ List.length_cons a as⟩ )
       | .error e => Except.error e
     | .error e => Except.error e
+
+instance [FromBytes α p] : FromBytes (Vector α m) (m * p) where
+  fromBytes := Vector.fromBytes
   
 instance [ToBytes α] : ToBytes (Vector α n) where
   toBytes := fun v => Vector.toBytes v
+
+def Nat.toVariableBytes (n : Nat) : Array UInt
 
 abbrev VariableVector (α : Type) (lower : Nat) (upper : Nat) := 
   Subtype (fun arr : Array α => lower <= arr.size ∧ arr.size <= upper)
@@ -76,6 +74,7 @@ abbrev VariableVector (α : Type) (lower : Nat) (upper : Nat) :=
 def VariableVector.toBytes [ToBytes α] : VariableVector α l u → Array UInt8
   | ⟨ arr , _ ⟩ => 
   arr.concatMap (fun a : α => (@ToBytes.toBytes α) a)
+
 
 abbrev Random := Vector UInt8 28
 

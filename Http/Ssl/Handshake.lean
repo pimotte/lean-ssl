@@ -1,17 +1,16 @@
 import Std.Data.List.Lemmas
 import Std.Data.Nat.Lemmas
+import Http.Ssl.BinParsec
 
 namespace Ssl
 
+open BinParsec
 -- Use RFC 8446 as base
 
 class ToBytes (α : Type) where
   toBytes : α → Array UInt8
 
 abbrev Vector (α : Type) (n : Nat) := Subtype (fun arr : List α => arr.length = n)
-
-class FromBytes (α : Type) (n : Nat) where
-  fromBytes : Vector UInt8 n → Except String α
 
 inductive HandshakeType where 
   | clientHello | serverHello
@@ -27,46 +26,17 @@ def concatMap (f : α → Array β) (as : List α) : Array β :=
 def Vector.toBytes [ToBytes α] : Vector α n → Array UInt8
   | ⟨ as , _ ⟩ => (concatMap (fun a : α => (@ToBytes.toBytes α) a) as)
 
-def ineq_lemma (n p : Nat) : p ≤ (.succ n) * p := by
-  induction p with
-  | zero => simp
-  | succ p' ihp => {
-    rw [Nat.mul_succ, ← Nat.add_one]
-    exact Nat.add_le_add ihp (Nat.pos_of_ne_zero (by simp))
-  }
+def vector (length : Nat) (elem : BinParsec α) : BinParsec (Vector α length) := do
+  match length with
+  | .zero => pure ⟨[] , by simp ⟩
+  | .succ len => 
+    let first ← elem
+    let ⟨ tail , htail ⟩ ← vector len elem
 
-def nat_lemma : Nat.succ m * p - p = m * p := by simp_arith [Nat.succ_mul, Nat.add_mul]
-    
-def Vector.take (h : n ≤ m) (as : Vector α m) : Vector α n :=
-  let ⟨ asl , aslh ⟩ := as
-  let taken := asl.take n
-  ⟨ taken , List.length_take_of_le (aslh ▸ h)⟩
+    pure ⟨first :: tail, by simp [htail]⟩
 
-theorem length_drop_of_le (h : n ≤ List.length l) : List.length (.drop n l) = List.length l - n := by simp
-
-def Vector.drop (h : n ≤ m) (as : Vector α m) : Vector α (m - n) :=
-  let ⟨ asl , aslh ⟩ := as
-  let taken := asl.drop n
-  ⟨ taken , aslh ▸ length_drop_of_le (aslh ▸ h)⟩
-
-def Vector.fromBytes [FromBytes α p] : Vector UInt8 (m * p) → Except String (Vector α m) := fun as =>
-  match m with
-  | .zero => .ok ⟨ [], (by simp) ⟩
-  | (.succ m) => 
-    match ((FromBytes.fromBytes (Vector.take (ineq_lemma _ _) as)) : Except String α) with
-    | .ok a => 
-      match Vector.fromBytes (nat_lemma ▸ Vector.drop (ineq_lemma _ _) as) with
-      | .ok ⟨ as , ash ⟩ => Except.ok (⟨a :: as, ash ▸ List.length_cons a as⟩ )
-      | .error e => Except.error e
-    | .error e => Except.error e
-
-instance [FromBytes α p] : FromBytes (Vector α m) (m * p) where
-  fromBytes := Vector.fromBytes
-  
 instance [ToBytes α] : ToBytes (Vector α n) where
   toBytes := fun v => Vector.toBytes v
-
-def Nat.toVariableBytes (n : Nat) : Array UInt
 
 abbrev VariableVector (α : Type) (lower : Nat) (upper : Nat) := 
   Subtype (fun arr : Array α => lower <= arr.size ∧ arr.size <= upper)

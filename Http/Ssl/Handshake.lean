@@ -1,6 +1,7 @@
 import Std.Data.List.Lemmas
 import Std.Data.Nat.Lemmas
 import Http.Ssl.BinParsec
+import Mathlib.Tactic.Linarith
 
 namespace Ssl
 
@@ -18,6 +19,95 @@ inductive HandshakeType where
   | certificateRequest | serverHelloDone
   | certificateVerify | clientKeyExchange
   | finished 
+
+def UInt8.toBytes : UInt8 → Array UInt8 := fun i => #[i]
+
+instance : ToBytes UInt8 where
+  toBytes := UInt8.toBytes
+
+def BinParsec.uInt8 : BinParsec UInt8 := fun bit => 
+  if bit.hasNext then
+    let val := bit.source.get! bit.idx
+    .success {
+      source := bit.source
+      idx := bit.idx + 1
+    } val
+  else
+    .error bit "Expected UInt8 instead of end of array"
+
+def UInt16.toBytes : UInt16 → Array UInt8 := fun i => 
+  #[(i.shiftRight (8*1)).toUInt8, (i.shiftRight (8*0)).toUInt8]
+
+-- #eval UInt16.toBytes 5000 -- #[19, 136]
+
+def BinParsec.uInt16 : BinParsec UInt16 := do
+  let b1 ← BinParsec.uInt8
+  let b2 ← BinParsec.uInt8
+  pure (b1.toUInt16.shiftLeft 8 + b2.toUInt16)
+
+#eval BinParsec.run BinParsec.uInt16 #[19, 136] -- 5000
+
+instance : ToBytes UInt16 where
+  toBytes := UInt16.toBytes
+
+abbrev UInt24 := Fin (2^24)
+
+def UInt24.toBytes : UInt24 → Array UInt8 := fun i =>
+  #[(i.shiftRight (⟨8 , by simp ⟩*⟨ 2 , by simp ⟩)).val.toUInt8, 
+    (i.shiftRight (⟨8 , by simp ⟩*⟨ 1 , by simp ⟩)).val.toUInt8, 
+    (i.shiftRight (⟨8 , by simp ⟩*⟨ 0 , by simp ⟩)).val.toUInt8]
+
+instance : ToBytes UInt24 where
+  toBytes := UInt24.toBytes
+
+def lemma_uint8 (b : UInt8) : b.toNat < 2^8 := by {
+  simp
+  exact b.val.isLt
+}
+
+def le_sub_one_of_lt (h : n < m) : n ≤ m - 1 := by
+  induction h with
+  | refl => simp_arith
+  | step h ih => {
+    simp_arith
+    exact Nat.le_trans ih (by simp_arith)
+  }
+
+def BinParsec.uInt24 : BinParsec UInt24 := do
+  let b1 ← BinParsec.uInt8
+  let b2 ← BinParsec.uInt8
+  let b3 ← BinParsec.uInt8
+  pure ⟨(b1.toNat * 2^16  + b2.toNat * 2^8 + b3.toNat), 
+    by {
+
+      simp_arith [UInt8.toNat]
+      have h1 : b2.toNat * 2^8 ≤ (2^8-1)*2^8 := 
+        Nat.mul_le_mul_of_nonneg_right (le_sub_one_of_lt b2.val.isLt)
+      
+      have h2 : b1.toNat * 2^16 ≤ (2^8-1)*2^16 := 
+        Nat.mul_le_mul_of_nonneg_right (le_sub_one_of_lt b1.val.isLt)
+      
+      linarith [h1, h2, b3.val.isLt]
+    }⟩
+
+-- #eval BinParsec.run BinParsec.uInt24 #[0, 19, 136] -- 5000
+#eval UInt24.toBytes ⟨5000, by simp⟩ -- #[0, 19, 136]
+
+def UInt32.toBytes : UInt32 → Array UInt8 :=
+  fun i => #[(i.shiftRight (8*3)).toUInt8, (i.shiftRight (8*2)).toUInt8, 
+            (i.shiftRight (8*1)).toUInt8, (i.shiftRight (8*0)).toUInt8]
+
+-- #eval UInt32.toBytes ⟨5000, by simp⟩ -- #[0, 0, 19, 136]
+-- #eval UInt32.toBytes 16909060 -- #[1, 2, 3, 4]
+
+instance : ToBytes UInt32 where
+  toBytes := UInt32.toBytes
+
+def UInt64.toBytes : UInt64 → Array UInt8 :=
+  fun i => #[(i.shiftRight (8*7)).toUInt8, (i.shiftRight (8*6)).toUInt8, 
+            (i.shiftRight (8*5)).toUInt8, (i.shiftRight (8*4)).toUInt8,
+            (i.shiftRight (8*3)).toUInt8, (i.shiftRight (8*2)).toUInt8, 
+            (i.shiftRight (8*1)).toUInt8, (i.shiftRight (8*0)).toUInt8]
 
 def concatMap (f : α → Array β) (as : List α) : Array β :=
   as.foldl (init := .empty) fun bs a => bs ++ f a
@@ -45,23 +135,7 @@ def VariableVector.toBytes [ToBytes α] : VariableVector α l u → Array UInt8
   | ⟨ arr , _ ⟩ => 
   arr.concatMap (fun a : α => (@ToBytes.toBytes α) a)
 
-
 abbrev Random := Vector UInt8 28
-
-def UInt8.toBytes : UInt8 → Array UInt8 := fun i => #[i]
-
-instance : ToBytes UInt8 where
-  toBytes := UInt8.toBytes
-
-def UInt32.toBytes : UInt32 → Array UInt8 :=
-  fun i => #[(i.shiftRight (8*3)).toUInt8, (i.shiftRight (8*2)).toUInt8, 
-            (i.shiftRight (8*1)).toUInt8, (i.shiftRight (8*0)).toUInt8]
-
--- #eval UInt32.toBytes 5000 -- #[0, 0, 19, 136]
-
-instance : ToBytes UInt32 where
-  toBytes := UInt32.toBytes
-
 
 abbrev SessionId := VariableVector UInt8 0 32
 

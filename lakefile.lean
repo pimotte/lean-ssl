@@ -14,8 +14,11 @@ lean_lib Http
 require Socket from git
   "https://github.com/xubaiw/lean4-socket.git" @ "main"
 
-require Std from git
-  "https://github.com/leanprover/std4/" @ "main"
+-- require std from git
+--   "https://github.com/leanprover/std4/" @ "main"
+
+require Mathlib from git
+  "https://github.com/leanprover-community/mathlib4" @ "master"
 
 -- require OpenSSL from git
 --   "https://github.com/yatima-inc/OpenSSL.lean" @ "7187dab2f60097194167dbfa5afd862c276f4cd7"

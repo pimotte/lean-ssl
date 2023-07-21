@@ -73,21 +73,35 @@ def le_sub_one_of_lt (h : n < m) : n ≤ m - 1 := by
     exact Nat.le_trans ih (by simp_arith)
   }
 
+def mwe (a b c : Fin 256) : a.val * 2^16 + b.val * 2^8 + c.val ≤ 2^24 := by 
+  have h1 : b.val * 2^8 ≤ (2^8-1)*2^8 := 
+    Nat.mul_le_mul_of_nonneg_right (le_sub_one_of_lt b.isLt)
+  
+  have h2 : a.val * 2^16 ≤ (2^8-1)*2^16 := 
+    Nat.mul_le_mul_of_nonneg_right (le_sub_one_of_lt a.isLt)
+  
+  have rhs : 2^24 = (2^8-1)*2^16 + (2^8-1)*2^8 + 2^8 := by simp_arith
+  simp [ UInt8.toNat, rhs, Nat.add_assoc]
+  set_option maxRecDepth 3000 in
+  exact Nat.add_le_add (Nat.add_le_add h2 h1) (c.isLt)
+  
+
 def BinParsec.uInt24 : BinParsec UInt24 := do
   let b1 ← BinParsec.uInt8
   let b2 ← BinParsec.uInt8
   let b3 ← BinParsec.uInt8
   pure ⟨(b1.toNat * 2^16  + b2.toNat * 2^8 + b3.toNat), 
     by {
-
-      simp_arith [UInt8.toNat]
       have h1 : b2.toNat * 2^8 ≤ (2^8-1)*2^8 := 
         Nat.mul_le_mul_of_nonneg_right (le_sub_one_of_lt b2.val.isLt)
       
       have h2 : b1.toNat * 2^16 ≤ (2^8-1)*2^16 := 
         Nat.mul_le_mul_of_nonneg_right (le_sub_one_of_lt b1.val.isLt)
       
-      linarith [h1, h2, b3.val.isLt]
+      have rhs : 2^24 = (2^8-1)*2^16 + (2^8-1)*2^8 + 2^8 := by simp_arith
+      simp [ UInt8.toNat, rhs, Nat.add_assoc]
+      set_option maxRecDepth 3000 in
+      exact Nat.add_le_add (Nat.add_le_add h2 h1) (b3.val.isLt)
     }⟩
 
 -- #eval BinParsec.run BinParsec.uInt24 #[0, 19, 136] -- 5000
@@ -184,7 +198,6 @@ def HandshakeType.asType : HandshakeType → Type
   | .clientHello => ClientHello
   | _ => String
 
-abbrev UInt24 := Subtype (fun n : UInt32 => n <= 167777215)
 
 structure Handshake (hType : HandshakeType) where
   length : UInt24

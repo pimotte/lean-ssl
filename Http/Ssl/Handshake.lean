@@ -147,6 +147,7 @@ def BinParsec.vector (length : Nat) (elem : BinParsec α) : BinParsec (Vector α
   | .zero => pure ⟨[] , by simp ⟩
   | .succ len => 
     let first ← elem
+    
     let ⟨ tail , htail ⟩ ← vector len elem
     pure ⟨first :: tail, by simp [htail]⟩
 

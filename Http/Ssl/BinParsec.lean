@@ -65,3 +65,10 @@ def eof : BinParsec Unit := fun it =>
     error it expectedEndOfInput
   else
     success it ()
+
+def counting (elem : BinParsec α) : BinParsec (α × Nat) := fun it =>
+  let pre := it.idx
+  let result := elem it
+  match result with
+  | success rem a => success rem ⟨a, rem.idx - pre⟩ 
+  | error pos msg => error pos msg

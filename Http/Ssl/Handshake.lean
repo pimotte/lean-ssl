@@ -11,8 +11,6 @@ open BinParsec
 class ToBytes (α : Type) where
   toBytes : α → Array UInt8
 
-abbrev Vector (α : Type) (n : Nat) := Subtype (fun arr : List α => arr.length = n)
-
 inductive HandshakeType where 
   | clientHello | serverHello
   | certificate | serverKeyExchange
@@ -139,26 +137,29 @@ def concatMap (f : α → Array β) (as : List α) : Array β :=
   as.foldl (init := .empty) fun bs a => bs ++ f a
 
 
-def Vector.toBytes [ToBytes α] : Vector α n → Array UInt8
-  | ⟨ as , _ ⟩ => (concatMap (fun a : α => (@ToBytes.toBytes α) a) as)
+def List.toBytes [ToBytes α] : List α → Array UInt8
+  := concatMap (fun a : α => (@ToBytes.toBytes α) a)
 
-def BinParsec.vector (length : Nat) (elem : BinParsec α) : BinParsec (Vector α length) := do
-  match length with
-  | .zero => pure ⟨[] , by simp ⟩
-  | .succ len => 
-    let first ← elem
-    
-    let ⟨ tail , htail ⟩ ← vector len elem
-    pure ⟨first :: tail, by simp [htail]⟩
+def BinParsec.list (numBytes : Nat) (elem : BinParsec α) : BinParsec (List α) := do
+  if 0 < numBytes then
+    let ⟨first, bytesConsumed ⟩ ← BinParsec.counting elem
+    if 0 < bytesConsumed  then
+      let tail  ← list (numBytes - bytesConsumed) elem
+      pure (first :: tail)
+    else
+      fail "Infinite loop, elem does not consume bytes when parsing list"
+  else
+    pure []
+  decreasing_by apply Nat.sub_lt <;> assumption
 
-instance [ToBytes α] : ToBytes (Vector α n) where
-  toBytes := fun v => Vector.toBytes v
+instance [ToBytes α] : ToBytes (List α) where
+  toBytes := List.toBytes
 
 -- #eval BinParsec.run (BinParsec.vector 3 BinParsec.uInt64) (Vector.toBytes (⟨[16909061, 16909060, 16909062], (by simp) ⟩ : Vector UInt64 3)) -- 16909060
 
 
-abbrev VariableVector (α : Type) (lower : Nat) (upper : UInt64) := 
-  Subtype (fun arr : Array α => lower <= arr.size ∧ arr.size <= upper.val)
+abbrev VariableVector (α : Type)  (upper : UInt64) := 
+  Subtype (fun arr : Array α => arr.size <= upper.val)
 
 def UInt64.toVariableBytes (n : UInt64) (u : UInt64) : Array UInt8 :=
   let raw := (UInt64.toBytes n).toList
@@ -191,8 +192,8 @@ def BinParsec.variableNumber (u : UInt64) : BinParsec Nat :=
         else
           BinParsec.uInt64 >>= (fun i it => .success it i.toNat)
 
-def VariableVector.toBytes [ToBytes α] : VariableVector α l u → Array UInt8
-  | ⟨ arr , ⟨ _ , hu ⟩ ⟩ =>
+def VariableVector.toBytes [ToBytes α] : VariableVector α u → Array UInt8
+  | ⟨ arr , hu ⟩ =>
     let size : Array UInt8 := UInt64.toVariableBytes ⟨ arr.size , (by linarith [u.val.isLt]) ⟩ u
     size ++ arr.concatMap (fun a : α => (@ToBytes.toBytes α) a)
 

@@ -446,3 +446,53 @@ def BinParsec.handshake : BinParsec (Handshake hType) := do
   else
     fail "Unexpected type"
   
+inductive ContentType where
+  | invalid | changeCipherSpec | alert
+  | handshake | applicationData
+
+def ContentType.toBytes : ContentType → Array UInt8
+  | .invalid => #[0, 0]
+  | .changeCipherSpec => #[0, 20]
+  | .alert => #[0, 21]
+  | .handshake => #[0, 22]
+  | .applicationData => #[0, 23]
+
+instance : ToBytes ContentType where
+  toBytes := ContentType.toBytes
+
+def BinParsec.contentType : BinParsec ContentType := do
+  let _ ← BinParsec.byte 0
+  let b ← BinParsec.uInt8
+  match b with
+  | 20 => pure .changeCipherSpec
+  | 21 => pure .alert
+  | 22 => pure .handshake
+  | 23 => pure .applicationData
+  | _ => pure .invalid
+
+structure TLSPlaintext where
+  type : ContentType
+  length : UInt16
+  fragment : Array UInt8
+
+def TLSPlaintext.toBytes (plain : TLSPlaintext) : Array UInt8 :=
+  plain.type.toBytes 
+  -- legacy record version
+  ++ #[3, 3] ++ 
+  UInt16.toBytes plain.length
+  ++ plain.fragment
+
+instance : ToBytes (TLSPlaintext) where
+  toBytes := TLSPlaintext.toBytes
+  
+def BinParsec.tLSPlaintext : BinParsec TLSPlaintext := do
+  let t ← BinParsec.contentType
+  let _ ← BinParsec.byte 3
+  let _ ← BinParsec.byte 3
+  let l ← BinParsec.uInt16
+  let fragment ← BinParsec.list l.toNat BinParsec.uInt8
+  pure {
+    type := t
+    length := l
+    fragment := fragment.toArray
+  }

@@ -37,15 +37,30 @@ def sendtest : IO ByteArray := do
     body := clientHello
   }
 
-  discard $ socket.send (.mk handshake.toBytes)
+  let plaintext : TLSPlaintext := {
+    type := .handshake
+    length := handshake.toBytes.size.toUInt16
+    fragment := handshake.toBytes
+  }
+
+  dbg_trace plaintext.toBytes
+
+  discard $ socket.send (.mk plaintext.toBytes)
   let bytesRecv ← socket.recv 8000
   dbg_trace String.fromUTF8Unchecked bytesRecv
-  let serverHello := BinParsec.run (BinParsec.serverHello) bytesRecv.data 
-  match serverHello with
-  | .ok val =>
-    let s := Ssl.ServerHello.toString val
-    dbg_trace s!"Success {s}"
-    return bytesRecv
+  let tlsPlaintextB := BinParsec.run (BinParsec.tLSPlaintext) bytesRecv.data 
+
+  match tlsPlaintextB with
   | .error e =>
-    dbg_trace s!"Error {e}"
+    dbg_trace s!"Error plaintext {e}"
     return bytesRecv
+  | .ok tlsPlaintext =>
+    let serverHello := BinParsec.run (BinParsec.serverHello) tlsPlaintext.fragment
+    match serverHello with
+    | .ok val =>
+      let s := Ssl.ServerHello.toString val
+      dbg_trace s!"Success {s}"
+      return bytesRecv
+    | .error e =>
+      dbg_trace s!"Error {e}"
+      return bytesRecv

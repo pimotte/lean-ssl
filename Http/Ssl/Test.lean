@@ -4,17 +4,18 @@ import Mathlib.Control.Random
 
 open Socket
 
-open Ssl
+namespace Ssl
 
-def randVector (n : Nat) : IO (Vector UInt8 n) :=
+def randVector (n : Nat) : IO (List UInt8) :=
   match n with
-  | .zero => pure ⟨[], by simp⟩
+  | .zero => pure []
   | .succ n => do
     let head : Fin 256 ← IO.runRand (Random.randFin)
-    let ⟨ tail, htail⟩ ← randVector n
-    pure ⟨⟨ head ⟩ :: tail, by simp [htail]⟩
+    let tail ← randVector n
+    pure (.mk head :: tail)
 
-def send (request : Request) : IO ByteArray := do
+
+def sendtest : IO ByteArray := do
   let remoteAddr ← SockAddr.mk
     (host := "catfact.ninja")
     (port := 443 |> ToString.toString)
@@ -27,10 +28,24 @@ def send (request : Request) : IO ByteArray := do
 
   let clientHello : ClientHello := {
     random := rand
-    cipherSuites := ⟨#[ ⟨[0x13,0x02], by simp⟩, ⟨[0x13, 0x01], by simp⟩], by simp ⟩
-    extensions := ⟨#[ ]
+    cipherSuites := ⟨#[[0x13,0x02], [0x13, 0x01]], (2^16-2).toUInt64⟩
+    extensions := ⟨#[⟨ .supportedVersions , ⟨ #[0, 1, 3 , 4], (2^16-1).toUInt64⟩⟩], (2^16-1).toUInt64⟩
   }
 
-  discard $ socket.send strSend.toUTF8
-  let bytesRecv ← socket.recv 5000
-  return bytesRecv
+  let handshake : Handshake .clientHello := {
+    length := ⟨clientHello.toBytes.size.mod (2^24), Nat.mod_lt _ (by simp_arith) ⟩
+    body := clientHello
+  }
+
+  discard $ socket.send (.mk handshake.toBytes)
+  let bytesRecv ← socket.recv 8000
+  dbg_trace String.fromUTF8Unchecked bytesRecv
+  let serverHello := BinParsec.run (BinParsec.serverHello) bytesRecv.data 
+  match serverHello with
+  | .ok val =>
+    let s := Ssl.ServerHello.toString val
+    dbg_trace s!"Success {s}"
+    return bytesRecv
+  | .error e =>
+    dbg_trace s!"Error {e}"
+    return bytesRecv

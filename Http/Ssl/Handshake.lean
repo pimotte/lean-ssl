@@ -17,6 +17,7 @@ inductive HandshakeType where
   | certificateRequest | serverHelloDone
   | certificateVerify | clientKeyExchange
   | finished 
+deriving BEq
 
 def UInt8.toBytes : UInt8 → Array UInt8 := fun i => #[i]
 
@@ -69,6 +70,8 @@ def UInt24.toBytes : UInt24 → Array UInt8 := fun i =>
   #[(i.shiftRight (⟨8 , by simp ⟩*⟨ 2 , by simp ⟩)).val.toUInt8, 
     (i.shiftRight (⟨8 , by simp ⟩*⟨ 1 , by simp ⟩)).val.toUInt8, 
     (i.shiftRight (⟨8 , by simp ⟩*⟨ 0 , by simp ⟩)).val.toUInt8]
+
+def UInt24fromNat (n : Nat) : UInt24 := ⟨n.mod (2^24), Nat.mod_lt _ (by simp_arith) ⟩
 
 instance : ToBytes UInt24 where
   toBytes := UInt24.toBytes
@@ -158,11 +161,20 @@ instance [ToBytes α] : ToBytes (List α) where
 -- #eval BinParsec.run (BinParsec.vector 3 BinParsec.uInt64) (Vector.toBytes (⟨[16909061, 16909060, 16909062], (by simp) ⟩ : Vector UInt64 3)) -- 16909060
 
 
-abbrev VariableVector (α : Type)  (upper : UInt64) := 
-  Subtype (fun arr : Array α => arr.size <= upper.val)
+structure  VariableVector (α : Type) where
+  val : Array α
+  maxByteSize : UInt64
 
-def UInt64.toVariableBytes (n : UInt64) (u : UInt64) : Array UInt8 :=
-  let raw := (UInt64.toBytes n).toList
+def concatMap' (f : α → String) (as : List α) : String:=
+  as.foldl (init := "") fun bs a => bs ++ ", " ++ f a
+def VariableVector.toString [ToString α] : VariableVector α → String
+  | ⟨ arr, size ⟩ => "#[" ++ concatMap' ToString.toString (arr.data) ++ s!"] max: {size}"
+
+instance [ToString α] : ToString (VariableVector α) where
+  toString := VariableVector.toString
+
+def UInt64.toVariableBytes (n : Nat) (u : UInt64) : Array UInt8 :=
+  let raw := (UInt64.toBytes n.toUInt64).toList
   if u.toNat < UInt8.size then
     (raw.drop 7).toArray
   else
@@ -192,35 +204,29 @@ def BinParsec.variableNumber (u : UInt64) : BinParsec Nat :=
         else
           BinParsec.uInt64 >>= (fun i it => .success it i.toNat)
 
-def VariableVector.toBytes [ToBytes α] : VariableVector α u → Array UInt8
-  | ⟨ arr , hu ⟩ =>
-    let size : Array UInt8 := UInt64.toVariableBytes ⟨ arr.size , (by linarith [u.val.isLt]) ⟩ u
+def VariableVector.toBytes [ToBytes α] : VariableVector α → Array UInt8
+  | ⟨ arr , maxByteSize ⟩ =>
+    let size : Array UInt8 := UInt64.toVariableBytes arr.size maxByteSize 
     size ++ arr.concatMap (fun a : α => (@ToBytes.toBytes α) a)
 
-def BinParsec.variableVector (l : Nat) (u : UInt64) (elem : BinParsec α) : BinParsec (VariableVector α l u) := do
-  let length ← BinParsec.variableNumber u
-  if h1 : l ≤ length  then
-    if h2 : length ≤ u.toNat then
-      let content ← BinParsec.vector length elem
-    
-      pure ⟨ content.val.toArray , 
-        ⟨ by simp [h1, content.property]
-        , by {
-          rw [UInt64.toNat] at h2
-          simp [h2, content.property]
-        }⟩ ⟩ 
-    else
-      fail "Parsed length of variable vector too long"
-  else
-    fail "Parsed length of variable vector too short"
+def BinParsec.variableVector (maxByteSize : UInt64) (elem : BinParsec α) : BinParsec (VariableVector α) := do
+  let byteSize ← BinParsec.variableNumber maxByteSize
+
+    let content ← BinParsec.list byteSize elem
+  
+    pure ⟨ content.toArray , maxByteSize ⟩ 
+
 
 -- #eval BinParsec.run (BinParsec.variableVector 2 10 BinParsec.uInt64) (VariableVector.toBytes (⟨#[16909061, 16909060, 16909062], ⟨by simp, by simp ⟩ ⟩ : VariableVector UInt64 2 10)) -- 16909060
 
-abbrev Random := Vector UInt8 28
+abbrev Random := List UInt8
+deriving instance ToString for Random
 
-abbrev SessionId := VariableVector UInt8 0 32
+abbrev SessionId := VariableVector UInt8
+deriving instance ToString for SessionId
 
-abbrev CipherSuite := Vector UInt8 2
+abbrev CipherSuite := List UInt8 
+deriving instance ToString for CipherSuite
 
 inductive ExtensionType where
   | serverName | maxFragmentLength | statusRequest | supportedGroups | signatureAlgorithms | useSrtp
@@ -228,6 +234,7 @@ inductive ExtensionType where
   | clientCertificateType | serverCertificateType | padding | preSharedKey
   | earlyData | supportedVersions | cookie | pskKeyExchangeModes | certificateAuthorities
   | oidFilters | postHandshakeAuth | signatureAlgorithmsCert | keyShare
+deriving Repr
 
 def ExtensionType.toBytes : ExtensionType → Array UInt8
   | .serverName => #[0, 0]
@@ -286,7 +293,14 @@ def BinParsec.extensionType : BinParsec ExtensionType := do
 
 structure Extension where
   extensionType : ExtensionType
-  extensionData : VariableVector UInt8 0 (2^16-1).toUInt64
+  extensionData : VariableVector UInt8
+
+def Extension.toString : Extension → String := fun ext =>
+  s!"Type: {ext.extensionType.toBytes}, Data : {ext.extensionData}"
+
+instance : ToString Extension where
+  toString := Extension.toString
+
 
 def Extension.toBytes (ext : Extension) : Array UInt8 :=
   ext.extensionType.toBytes ++ ext.extensionData.toBytes
@@ -296,20 +310,20 @@ instance : ToBytes Extension where
 
 def BinParsec.extension : BinParsec Extension := do
   let type ← BinParsec.extensionType
-  let data ← BinParsec.variableVector 0 (2^16-1).toUInt64 BinParsec.uInt8
+  let data ← BinParsec.variableVector (2^16-1).toUInt64 BinParsec.uInt8
   pure (.mk type data)
  
 
 structure ClientHello where
   random : Random
-  cipherSuites : VariableVector CipherSuite 2 (2^16-1).toUInt64
-  extensions : VariableVector Extension 8 (2^16-1).toUInt64
+  cipherSuites : VariableVector CipherSuite
+  extensions : VariableVector Extension
 
 
 def ClientHello.toBytes : ClientHello → Array UInt8 := fun ch =>
   -- v1.2 hardcoded
   #[0x03, 0x03] 
-    ++ ch.random.toBytes 
+    ++ List.toBytes ch.random 
     -- Legacy session id
     ++ #[0] 
     ++ ch.cipherSuites.toBytes 
@@ -323,11 +337,11 @@ instance : ToBytes ClientHello where
 def BinParsec.clientHello : BinParsec ClientHello := do
   let _ ← BinParsec.byte 3
   let _ ← BinParsec.byte 3
-  let random ← BinParsec.vector 28 BinParsec.uInt8
+  let random ← BinParsec.list 28 BinParsec.uInt8
   let _ ← BinParsec.byte 0
-  let suites ← BinParsec.variableVector 2 (2^16-1).toUInt64 (BinParsec.vector 2 BinParsec.uInt8)
+  let suites ← BinParsec.variableVector (2^16-1).toUInt64 (BinParsec.list 2 BinParsec.uInt8)
   let _ ← BinParsec.byte 0
-  let extensions ← BinParsec.variableVector 8 (2^16-1).toUInt64 BinParsec.extension
+  let extensions ← BinParsec.variableVector (2^16-1).toUInt64 BinParsec.extension
   pure {
     random := random
     cipherSuites := suites
@@ -340,16 +354,36 @@ structure ServerHello where
   -- legacySessionIdEcho : SessionId (not relevant, since we don't send sessionIds)
   cipherSuite : CipherSuite
   -- compressionMethod : CompressionMethod
-  extensions : VariableVector Extension 6 (2^16-1).toUInt64
+  extensions : VariableVector Extension
+
+def ServerHello.toString : ServerHello → String := fun m =>
+  s!"random: {m.random}, cipherSuite : {m.cipherSuite}, extensions: {m.extensions}"
+
+instance : ToString ServerHello where
+  toString := ServerHello.toString
+
+def ServerHello.toBytes : ServerHello → Array UInt8 := fun ch =>
+  -- v1.2 hardcoded
+  #[0x03, 0x03] 
+    ++ List.toBytes ch.random 
+    -- Legacy session id
+    ++ #[0] 
+    ++ List.toBytes ch.cipherSuite
+    -- Legacy Compression methods
+    ++ #[0]
+    ++ ch.extensions.toBytes
+
+instance : ToBytes ServerHello where
+  toBytes := ServerHello.toBytes
 
 def BinParsec.serverHello : BinParsec ServerHello := do
   let _ ← BinParsec.byte 3
   let _ ← BinParsec.byte 3
-  let random ← BinParsec.vector 28 BinParsec.uInt8
+  let random ← BinParsec.list 28 BinParsec.uInt8
   let _ ← BinParsec.byte 0
-  let suite ← BinParsec.vector 2 BinParsec.uInt8
+  let suite ← BinParsec.list 2 BinParsec.uInt8
   let _ ← BinParsec.byte 0
-  let extensions ← BinParsec.variableVector 6 (2^16-1).toUInt64 BinParsec.extension
+  let extensions ← BinParsec.variableVector (2^16-1).toUInt64 BinParsec.extension
   pure {
     random := random
     cipherSuite := suite
@@ -357,9 +391,58 @@ def BinParsec.serverHello : BinParsec ServerHello := do
   }
 def HandshakeType.asType : HandshakeType → Type
   | .clientHello => ClientHello
+  | .serverHello => ServerHello
   | _ => String
+  
+def HandshakeType.toBytes : HandshakeType → Array UInt8
+  | .clientHello => #[0, 1]
+  | .serverHello => #[0, 2]
+  | _ => #[0, 0]
 
+def BinParsec.handshakeType : BinParsec HandshakeType := do
+  let _ ← BinParsec.byte 0
+  let b ← BinParsec.uInt8
+  match b with
+  | 0 => pure .clientHello
+  | 1 => pure .serverHello
+  | _ => fail "Unimplemented handshake type"
+
+instance : ToBytes HandshakeType where
+  toBytes := HandshakeType.toBytes
 
 structure Handshake (hType : HandshakeType) where
   length : UInt24
   body : hType.asType
+
+
+def Handshake.toBytes : Handshake hType → Array UInt8 := fun msg =>
+  let bodyFunction : hType.asType → Array UInt8 := match hType with
+  | .clientHello => ClientHello.toBytes
+  | .serverHello => ServerHello.toBytes
+  | _ => fun _ => #[1, 3, 3, 7]
+  hType.toBytes ++ msg.length.toBytes ++ (bodyFunction msg.body)
+
+instance : ToBytes (Handshake hType) where
+  toBytes := Handshake.toBytes
+
+def BinParsec.handshake : BinParsec (Handshake hType) := do
+  let t ← BinParsec.handshakeType
+  if t == hType then
+    let l ← BinParsec.uInt24
+    match hType with
+    | .clientHello => 
+      let body ← BinParsec.clientHello
+      pure {
+        length := l
+        body := body
+      }
+    | .serverHello => 
+      let body ← BinParsec.serverHello
+      pure {
+        length := l
+        body := body
+      }
+    | _ => fail "Unimplemented handshake type"
+  else
+    fail "Unexpected type"
+  

@@ -24,12 +24,13 @@ def sendtest : IO ByteArray := do
   let socket ← Socket.mk .inet .stream
   socket.connect remoteAddr
 
-  let rand ← randVector 28
+  let rand ← randVector 32
+  dbg_trace s!"Randvectorlength {rand.length}"
 
   let clientHello : ClientHello := {
     random := rand
     cipherSuites := ⟨#[[0x13,0x02], [0x13, 0x01]], (2^16-2).toUInt64⟩
-    extensions := ⟨#[⟨ .supportedVersions , ⟨ #[0, 1, 3 , 4], (2^16-1).toUInt64⟩⟩], (2^16-1).toUInt64⟩
+    extensions := ⟨#[⟨ .supportedVersions , ⟨ #[2, 3, 4], (2^16-1).toUInt64⟩⟩], (2^16-1).toUInt64⟩
   }
 
   let handshake : Handshake .clientHello := {

@@ -205,9 +205,10 @@ def BinParsec.variableNumber (u : UInt64) : BinParsec Nat :=
           BinParsec.uInt64 >>= (fun i it => .success it i.toNat)
 
 def VariableVector.toBytes [ToBytes α] : VariableVector α → Array UInt8
-  | ⟨ arr , maxByteSize ⟩ =>
-    let size : Array UInt8 := UInt64.toVariableBytes arr.size maxByteSize 
-    size ++ arr.concatMap (fun a : α => (@ToBytes.toBytes α) a)
+  | ⟨ arr , maxByteSize ⟩ =>   
+    let contents := arr.concatMap (fun a : α => (@ToBytes.toBytes α) a)
+    let size : Array UInt8 := UInt64.toVariableBytes contents.size maxByteSize 
+    size ++ contents
 
 def BinParsec.variableVector (maxByteSize : UInt64) (elem : BinParsec α) : BinParsec (VariableVector α) := do
   let byteSize ← BinParsec.variableNumber maxByteSize
@@ -328,7 +329,7 @@ def ClientHello.toBytes : ClientHello → Array UInt8 := fun ch =>
     ++ #[0] 
     ++ ch.cipherSuites.toBytes 
     -- Legacy Compression methods
-    ++ #[0]
+    ++ #[1, 0]
     ++ ch.extensions.toBytes
 
 instance : ToBytes ClientHello where
@@ -337,7 +338,7 @@ instance : ToBytes ClientHello where
 def BinParsec.clientHello : BinParsec ClientHello := do
   let _ ← BinParsec.byte 3
   let _ ← BinParsec.byte 3
-  let random ← BinParsec.list 28 BinParsec.uInt8
+  let random ← BinParsec.list 32 BinParsec.uInt8
   let _ ← BinParsec.byte 0
   let suites ← BinParsec.variableVector (2^16-1).toUInt64 (BinParsec.list 2 BinParsec.uInt8)
   let _ ← BinParsec.byte 0
@@ -370,7 +371,7 @@ def ServerHello.toBytes : ServerHello → Array UInt8 := fun ch =>
     ++ #[0] 
     ++ List.toBytes ch.cipherSuite
     -- Legacy Compression methods
-    ++ #[0]
+    ++ #[1, 0]
     ++ ch.extensions.toBytes
 
 instance : ToBytes ServerHello where
@@ -379,7 +380,7 @@ instance : ToBytes ServerHello where
 def BinParsec.serverHello : BinParsec ServerHello := do
   let _ ← BinParsec.byte 3
   let _ ← BinParsec.byte 3
-  let random ← BinParsec.list 28 BinParsec.uInt8
+  let random ← BinParsec.list 32 BinParsec.uInt8
   let _ ← BinParsec.byte 0
   let suite ← BinParsec.list 2 BinParsec.uInt8
   let _ ← BinParsec.byte 0
@@ -395,12 +396,11 @@ def HandshakeType.asType : HandshakeType → Type
   | _ => String
   
 def HandshakeType.toBytes : HandshakeType → Array UInt8
-  | .clientHello => #[0, 1]
-  | .serverHello => #[0, 2]
-  | _ => #[0, 0]
+  | .clientHello => #[1]
+  | .serverHello => #[2]
+  | _ => #[0]
 
 def BinParsec.handshakeType : BinParsec HandshakeType := do
-  let _ ← BinParsec.byte 0
   let b ← BinParsec.uInt8
   match b with
   | 0 => pure .clientHello
@@ -451,17 +451,16 @@ inductive ContentType where
   | handshake | applicationData
 
 def ContentType.toBytes : ContentType → Array UInt8
-  | .invalid => #[0, 0]
-  | .changeCipherSpec => #[0, 20]
-  | .alert => #[0, 21]
-  | .handshake => #[0, 22]
-  | .applicationData => #[0, 23]
+  | .invalid => #[0]
+  | .changeCipherSpec => #[20]
+  | .alert => #[21]
+  | .handshake => #[22]
+  | .applicationData => #[23]
 
 instance : ToBytes ContentType where
   toBytes := ContentType.toBytes
 
 def BinParsec.contentType : BinParsec ContentType := do
-  let _ ← BinParsec.byte 0
   let b ← BinParsec.uInt8
   match b with
   | 20 => pure .changeCipherSpec
@@ -478,7 +477,7 @@ structure TLSPlaintext where
 def TLSPlaintext.toBytes (plain : TLSPlaintext) : Array UInt8 :=
   plain.type.toBytes 
   -- legacy record version
-  ++ #[3, 3] ++ 
+  ++ #[3, 1] ++ 
   UInt16.toBytes plain.length
   ++ plain.fragment
 

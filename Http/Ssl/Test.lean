@@ -1,5 +1,6 @@
 import Socket
 import Http.Ssl.Handshake
+import Http.Ssl.ToBytes
 import Mathlib.Control.Random
 
 open Socket

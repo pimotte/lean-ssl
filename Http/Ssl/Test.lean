@@ -30,8 +30,8 @@ def sendtest : IO ByteArray := do
 
   let clientHello : ClientHello := {
     random := rand
-    cipherSuites := ⟨#[[0x13,0x02], [0x13, 0x01]], (2^16-2).toUInt64⟩
-    extensions := ⟨#[⟨ .supportedVersions , ⟨ #[2, 3, 4], (2^16-1).toUInt64⟩⟩], (2^16-1).toUInt64⟩
+    cipherSuites := [[0x13,0x02], [0x13, 0x01]]
+    extensions := ([⟨ .supportedVersions , [0x0304]⟩] : VariableVector (Extension .clientHello) 2)
   }
 
   let handshake : Handshake .clientHello := {
@@ -60,8 +60,7 @@ def sendtest : IO ByteArray := do
     let serverHello := BinParsec.run (BinParsec.serverHello) tlsPlaintext.fragment
     match serverHello with
     | .ok val =>
-      let s := Ssl.ServerHello.toString val
-      dbg_trace s!"Success {s}"
+      dbg_trace s!"Success !"
       return bytesRecv
     | .error e =>
       dbg_trace s!"Error {e}"

@@ -58,7 +58,7 @@ def Nat.toVariableBytes (n : Nat) (numBytes : Nat) : List UInt8 :=
 #eval Nat.toVariableBytes 5 3
 
 def VariableVector.toBytes [ToBytes α] : VariableVector α n → Array UInt8
-  | ⟨ as , maxByteSize ⟩ =>   
+  | as =>   
     let contents :=  as.foldl (init := .empty) fun bs a => bs ++ (@ToBytes.toBytes α) a
     let size : Array UInt8 := (Nat.toVariableBytes contents.size n).toArray
     size ++ contents
@@ -90,20 +90,20 @@ def ExtensionType.toBytes : ExtensionType → Array UInt8
 instance : ToBytes ExtensionType where
   toBytes := ExtensionType.toBytes
 
-def ExtensionData.toBytes (eData : ExtensionData eType hType) : Array UInt8 :=
-  match eType, hType with
-  | .supportedVersions , .clientHello => VariableVector.toBytes eData
-  | .supportedVersions , .serverHello => VariableVector.toBytes eData
-  | _ , _ => #[1]
+def ExtensionData.toBytes (eData : ExtensionData eType hType) : Array UInt8 := 
+  let payloadFun : ExtensionData eType hType → Array UInt8  := match eType, hType with
+  | .supportedVersions , .clientHello => @VariableVector.toBytes _ 1 _
+  | .supportedVersions , .serverHello => UInt16.toBytes
+  | _ , _ => fun _ => #[1]
+  @VariableVector.toBytes _ 2 _ (payloadFun eData).toList
+
+instance : ToBytes (ExtensionData eType hType) where
+  toBytes := ExtensionData.toBytes
 
 def Extension.toBytes (ext : Extension hType) : Array UInt8 :=
-  let data := match ext.extensionType, hType with
-  | .supportedVersions , .clientHello => VariableVector.toBytes ext.extensionData
-  | .supportedVersions , .serverHello => ProtocolVersion
-  -- TODO finish
-  | _ , _ => #[1, 3, 3, 7]
-  ext.extensionType.toBytes ++ data
-instance : ToBytes Extension where
+  ext.extensionType.toBytes ++ ext.extensionData.toBytes
+
+instance : ToBytes (Extension hType) where
   toBytes := Extension.toBytes
 
 

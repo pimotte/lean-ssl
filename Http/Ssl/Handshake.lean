@@ -107,10 +107,10 @@ def BinParsec.list (numBytes : Nat) (elem : BinParsec α) : BinParsec (List α) 
 
 def concatMap' (f : α → String) (as : List α) : String:=
   as.foldl (init := "") fun bs a => bs ++ ", " ++ f a
-def VariableVector.toString [ToString α] : VariableVector α → String
-  | ⟨ arr, size ⟩ => "#[" ++ concatMap' ToString.toString (arr.data) ++ s!"] max: {size}"
+def VariableVector.toString [ToString α] : VariableVector α n → String
+  | arr => "#[" ++ concatMap' ToString.toString (arr) ++ s!"] byteSize: {n}"
 
-instance [ToString α] : ToString (VariableVector α) where
+instance [ToString α] : ToString (VariableVector α n) where
   toString := VariableVector.toString
 
 
@@ -131,12 +131,12 @@ def BinParsec.variableNumber (u : UInt64) : BinParsec Nat :=
 
 
 
-def BinParsec.variableVector (maxByteSize : UInt64) (elem : BinParsec α) : BinParsec (VariableVector α) := do
+def BinParsec.variableVector (maxByteSize : UInt64) (elem : BinParsec α) : BinParsec (VariableVector α n) := do
   let byteSize ← BinParsec.variableNumber maxByteSize
 
     let content ← BinParsec.list byteSize elem
   
-    pure ⟨ content.toArray , maxByteSize ⟩ 
+    pure content
 
 
 -- #eval BinParsec.run (BinParsec.variableVector 2 10 BinParsec.uInt64) (VariableVector.toBytes (⟨#[16909061, 16909060, 16909062], ⟨by simp, by simp ⟩ ⟩ : VariableVector UInt64 2 10)) -- 16909060
@@ -177,18 +177,16 @@ def BinParsec.extensionType : BinParsec ExtensionType := do
 
 
 
-def Extension.toString : Extension → String := fun ext =>
-  s!"Extension: TODO"
-
-instance : ToString Extension where
-  toString := Extension.toString
-
-
+def BinParsec.extensionData : BinParsec (ExtensionData eType hType) :=
+  match eType, hType with
+  | .supportedVersions , .clientHello => (BinParsec.variableVector (2^16-1).toUInt64 BinParsec.uInt16 : BinParsec (VariableVector UInt16 2))
+  | .supportedVersions , .serverHello => BinParsec.uInt16
+  | _ , _ => do fail "Unimplemented"
 
 
-def BinParsec.extension : BinParsec Extension := do
+def BinParsec.extension : BinParsec (Extension hType) := do
   let type ← BinParsec.extensionType
-  let data ← BinParsec.variableVector (2^16-1).toUInt64 BinParsec.uInt8
+  let data ← BinParsec.extensionData
   pure (.mk type data)
  
 
@@ -211,11 +209,11 @@ def BinParsec.clientHello : BinParsec ClientHello := do
   }
 
 
-def ServerHello.toString : ServerHello → String := fun m =>
-  s!"random: {m.random}, cipherSuite : {m.cipherSuite}, extensions: {m.extensions}"
+-- def ServerHello.toString : ServerHello → String := fun m =>
+--   s!"random: {m.random}, cipherSuite : {m.cipherSuite}, extensions: {m.extensions}"
 
-instance : ToString ServerHello where
-  toString := ServerHello.toString
+-- instance : ToString ServerHello where
+--   toString := ServerHello.toString
 
 
 

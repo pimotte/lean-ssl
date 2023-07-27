@@ -19,7 +19,7 @@ def UInt24.size := 2^24
 abbrev UInt24 := Fin UInt24.size
 
 
-abbrev  VariableVector (α : Type) (lengthByteSize : Nat) := { x : List α // x.length < 2^(lengthByteSize*8)} 
+abbrev  VariableVector (α : Type) (lengthByteSize : Nat) := List α
 
 -- def VariableVector.maxByteSize (v : VariableVector α maxByteSize) : UInt64 v.maxByteSize
 
@@ -43,7 +43,7 @@ inductive ExtensionType where
   | oidFilters | postHandshakeAuth | signatureAlgorithmsCert | keyShare
 deriving Repr
 
-abbrev SupportedVersions := VariableVector ProtocolVersion 2
+abbrev SupportedVersions := VariableVector ProtocolVersion 1
 
 abbrev Hostname := VariableVector UInt8 2
 

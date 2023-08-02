@@ -240,26 +240,69 @@ def BinParsec.handshakeType : BinParsec HandshakeType := do
 
 
 
-def BinParsec.handshake : BinParsec (Handshake hType) := do
-  let t ← BinParsec.handshakeType
-  if t == hType then
-    let l ← BinParsec.uInt24
-    match hType with
-    | .clientHello => 
-      let body ← BinParsec.clientHello
-      pure {
-        length := l
-        body := body
-      }
-    | .serverHello => 
-      let body ← BinParsec.serverHello
-      pure {
-        length := l
-        body := body
-      }
-    | _ => fail "Unimplemented handshake type"
-  else
-    fail "Unexpected type"
+def BinParsec.handshake : BinParsec Handshake := do
+  let hType ← BinParsec.handshakeType
+  let l ← BinParsec.uInt24
+  match hType with
+  | .clientHello => 
+    let body ← BinParsec.clientHello
+    pure {
+      hType := .clientHello
+      length := l
+      body := body
+    }
+  | .serverHello => 
+    let body ← BinParsec.serverHello
+    pure {
+      hType := .serverHello
+      length := l
+      body := body
+    }
+  | _ => fail "Unimplemented handshake type"
+
+def BinParsec.alertLevel : BinParsec AlertLevel := do
+  let b ← BinParsec.uInt8
+  match b with
+  | 1 => pure .warning
+  | 2 => pure .fatal
+  | _ => fail "Unexpected AlertLevel"
+
+def BinParsec.alertDescription : BinParsec AlertDescription := do
+  let b ← BinParsec.uInt8
+  match b with
+  | 0 => pure .closeNotify
+  | 10 => pure .unexpectedMessage
+  | 20 => pure .badRecordMac
+  | 22 => pure .recordOverflow
+  | 40 => pure .handshakeFailure
+  | 42 => pure .badCertificate
+  | 43 => pure .unsupportedCertificate
+  | 44 => pure .certificateRevoked
+  | 45 => pure .certificateExpired
+  | 46 => pure .certificateUnknown
+  | 47 => pure .illegalParameter
+  | 48 => pure .unknownCa
+  | 49 => pure .accessDenied
+  | 50 => pure .decodeError
+  | 51 => pure .decryptError
+  | 70 => pure .protocolVersion
+  | 71 => pure .insufficientSecurity
+  | 80 => pure .internalError
+  | 86 => pure .inappropriateFallback
+  | 90 => pure .userCanceled
+  | 109 => pure .missingExtension
+  | 110 => pure .unsupportedExtension
+  | 112 => pure .unrecognizedName
+  | 113 => pure .badCertificateResponseStatus
+  | 115 => pure .unknownPskIdentity
+  | 116 => pure .certificateRequired
+  | 120 => pure .noApplicationProtocol
+  | _ => fail "Unknown AlertDescription"
+
+def BinParsec.alert : BinParsec Alert := do
+  let level ← BinParsec.alertLevel
+  let desc ← BinParsec.alertDescription
+  pure ⟨ level , desc ⟩ 
 
 def BinParsec.contentType : BinParsec ContentType := do
   let b ← BinParsec.uInt8

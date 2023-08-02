@@ -149,7 +149,7 @@ structure ServerName where
   -- NameType can only be host name
   name : Hostname
 
-def ServerName.toBytes : ServerName → Array UInt8 := fun sn => sn.name.toBytes
+def ServerName.toBytes : ServerName → Array UInt8 := fun sn => #[0] ++ sn.name.toBytes
 
 instance : ToBytes ServerName where
   toBytes := ServerName.toBytes
@@ -159,6 +159,7 @@ abbrev ServerNameList := VariableVector ServerName 2
 def ExtensionData : ExtensionType → HandshakeType → Type
   | .supportedVersions , .clientHello => SupportedVersions
   | .supportedVersions , .serverHello => ProtocolVersion
+  | .serverName , _ => ServerNameList
   | _, _  => VariableVector UInt8 1
 
 structure Extension (hType : HandshakeType) where
@@ -169,6 +170,7 @@ def ExtensionData.toBytes (eData : ExtensionData eType hType) : Array UInt8 :=
   let rawBytes := match eType, hType with
   | .supportedVersions , .clientHello => VariableVector.toBytes eData
   | .supportedVersions , .serverHello => UInt16.toBytes eData
+  | .serverName , _ => VariableVector.toBytes eData
   | _ , _ => #[1]
   let size : Array UInt8 := (Nat.toVariableBytes rawBytes.size 2).toArray
   size ++ rawBytes
@@ -207,9 +209,71 @@ def HandshakeType.asType : HandshakeType → Type
   | .serverHello => ServerHello
   | _ => String
 
-structure Handshake (hType : HandshakeType) where
+structure Handshake where
+  hType : HandshakeType
   length : UInt24
   body : hType.asType
+
+inductive AlertLevel
+  | warning | fatal
+deriving Repr
+
+def AlertLevel.toBytes : AlertLevel → Array UInt8
+  | .warning => #[1]
+  | .fatal => #[2]
+
+instance : ToBytes AlertLevel where
+  toBytes := AlertLevel.toBytes
+
+inductive AlertDescription
+  | closeNotify | unexpectedMessage | badRecordMac | recordOverflow
+  | handshakeFailure | badCertificate | unsupportedCertificate | certificateRevoked
+  | certificateExpired | certificateUnknown | illegalParameter | unknownCa
+  | accessDenied | decodeError | decryptError | protocolVersion | insufficientSecurity
+  | internalError | inappropriateFallback | userCanceled | missingExtension
+  | unsupportedExtension | unrecognizedName | badCertificateResponseStatus
+  | unknownPskIdentity | certificateRequired | noApplicationProtocol
+deriving Repr
+
+def AlertDescription.toBytes : AlertDescription → Array UInt8
+  | .closeNotify => #[0]
+  | .unexpectedMessage => #[10]
+  | .badRecordMac => #[20]
+  | .recordOverflow => #[22]
+  | .handshakeFailure => #[40]
+  | .badCertificate => #[42]
+  | .unsupportedCertificate => #[43]
+  | .certificateRevoked => #[44]
+  | .certificateExpired => #[45]
+  | .certificateUnknown => #[46]
+  | .illegalParameter => #[47]
+  | .unknownCa => #[48]
+  | .accessDenied => #[49]
+  | .decodeError => #[50]
+  | .decryptError => #[51]
+  | .protocolVersion => #[70]
+  | .insufficientSecurity => #[71]
+  | .internalError => #[80]
+  | .inappropriateFallback => #[86]
+  | .userCanceled => #[90]
+  | .missingExtension => #[109]
+  | .unsupportedExtension => #[110]
+  | .unrecognizedName => #[112]
+  | .badCertificateResponseStatus => #[113]
+  | .unknownPskIdentity => #[115]
+  | .certificateRequired => #[116]
+  | .noApplicationProtocol => #[120]
+
+instance : ToBytes AlertDescription where
+  toBytes := AlertDescription.toBytes
+
+structure Alert where
+  level : AlertLevel
+  description : AlertDescription
+deriving Repr
+
+def Alert.toBytes : Alert → Array UInt8 := fun al =>
+  (level al).toBytes ++ (description al).toBytes
 
 inductive ContentType where
   | invalid | changeCipherSpec | alert

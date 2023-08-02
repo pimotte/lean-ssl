@@ -31,15 +31,18 @@ def sendtest : IO ByteArray := do
   let clientHello : ClientHello := {
     random := rand
     cipherSuites := ⟨[CipherSuite.TLS_AES_128_GCM_SHA256], by simp⟩
-    extensions := ⟨[⟨ .supportedVersions , ⟨[SupportedVersions.tls1_3], by simp⟩⟩], by {
-      rw [List.map, bytesize, ToBytes.toBytes]
-      unfold instToBytesExtension
-      rw [Extension.bytesize_eq _]
-      simp
+    extensions := ⟨[⟨ .supportedVersions , ⟨[SupportedVersions.tls1_3], by simp⟩⟩,
+                    ⟨ .serverName , ⟨[⟨ "catfact.ninja".toUTF8.data.toList , by sorry⟩]  , by sorry⟩⟩], by {
+                      sorry
+      -- rw [List.map, bytesize, ToBytes.toBytes]
+      -- unfold instToBytesExtension
+      -- rw [Extension.bytesize_eq _]
+      -- simp
     }⟩
   }
 
-  let handshake : Handshake .clientHello := {
+  let handshake : Handshake := {
+    hType := .clientHello
     length := ⟨clientHello.toBytes.size.mod (2^24), Nat.mod_lt _ (by simp_arith) ⟩
     body := clientHello
   }
@@ -62,11 +65,26 @@ def sendtest : IO ByteArray := do
     dbg_trace s!"Error plaintext {e}"
     return bytesRecv
   | .ok tlsPlaintext =>
-    let serverHello := BinParsec.run (BinParsec.serverHello) tlsPlaintext.fragment
-    match serverHello with
-    | .ok val =>
-      dbg_trace s!"Success !"
-      return bytesRecv
-    | .error e =>
-      dbg_trace s!"Error {e}"
-      return bytesRecv
+    match tlsPlaintext.type with
+    | .handshake =>
+      let serverHello := BinParsec.run (BinParsec.handshake) tlsPlaintext.fragment
+      match serverHello with
+      | .ok val =>
+        dbg_trace s!"Success ServHello !"
+        return bytesRecv
+      | .error e =>
+        dbg_trace s!"Error {e}"
+        return bytesRecv
+    | .alert => 
+      -- TODO correct
+      let alert := BinParsec.run (BinParsec.alert) tlsPlaintext.fragment
+      match alert with
+      | .ok val =>
+        dbg_trace s!"Alert: {repr val}"
+        return bytesRecv
+      | .error e =>
+        dbg_trace s!"Error {e}"
+        return bytesRecv
+    | _ => 
+        dbg_trace s!"Unimplemented contenType"
+        return bytesRecv

@@ -41,14 +41,15 @@ def HandshakeType.toBytes : HandshakeType → Array UInt8
 instance : ToBytes HandshakeType where
   toBytes := HandshakeType.toBytes
 
-def Handshake.toBytes : Handshake hType → Array UInt8 := fun msg =>
+def Handshake.toBytes : Handshake → Array UInt8 := fun msg =>
+  let hType := msg.hType
   let bodyFunction : hType.asType → Array UInt8 := match hType with
   | .clientHello => ClientHello.toBytes
   | .serverHello => ServerHello.toBytes
   | _ => fun _ => #[1, 3, 3, 7]
   hType.toBytes ++ msg.length.toBytes ++ (bodyFunction msg.body)
 
-instance : ToBytes (Handshake hType) where
+instance : ToBytes Handshake where
   toBytes := Handshake.toBytes
 
 def ContentType.toBytes : ContentType → Array UInt8

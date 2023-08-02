@@ -30,8 +30,13 @@ def sendtest : IO ByteArray := do
 
   let clientHello : ClientHello := {
     random := rand
-    cipherSuites := [[0x13,0x02], [0x13, 0x01]]
-    extensions := ([⟨ .supportedVersions , [0x0304]⟩] : VariableVector (Extension .clientHello) 2)
+    cipherSuites := ⟨[CipherSuite.TLS_AES_128_GCM_SHA256], by simp⟩
+    extensions := ⟨[⟨ .supportedVersions , ⟨[SupportedVersions.tls1_3], by simp⟩⟩], by {
+      rw [List.map, bytesize, ToBytes.toBytes]
+      unfold instToBytesExtension
+      rw [Extension.bytesize_eq _]
+      simp
+    }⟩
   }
 
   let handshake : Handshake .clientHello := {

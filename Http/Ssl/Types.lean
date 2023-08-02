@@ -19,7 +19,7 @@ def UInt24.size := 2^24
 abbrev UInt24 := Fin UInt24.size
 
 
-abbrev  VariableVector (α : Type) (lengthByteSize : Nat) := List α
+abbrev VariableVector (α : Type) (lengthByteSize : Nat) := List α
 
 -- def VariableVector.maxByteSize (v : VariableVector α maxByteSize) : UInt64 v.maxByteSize
 
@@ -44,6 +44,8 @@ inductive ExtensionType where
 deriving Repr
 
 abbrev SupportedVersions := VariableVector ProtocolVersion 1
+
+def SupportedVersions.tls1_3 := [0x0304]
 
 abbrev Hostname := VariableVector UInt8 2
 

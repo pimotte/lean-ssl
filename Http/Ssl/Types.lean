@@ -33,11 +33,12 @@ def List.toBytes [ToBytes α] : List α → Array UInt8
 instance [ToBytes α] : ToBytes (List α) where
   toBytes := List.toBytes
 
+@[simp]
 def Nat.toVariableBytes (n : Nat) (numBytes : Nat) : List UInt8 :=
   match numBytes with
   | .zero => []
   | .succ b => (n.toUInt64.shiftRight (8 * b).toUInt64).toUInt8 :: Nat.toVariableBytes n b
-#eval Nat.toVariableBytes 5 3
+-- #eval Nat.toVariableBytes 5 3
 
 def VariableVector.toBytes [ToBytes α] : VariableVector α n → Array UInt8
   | as =>   
@@ -45,7 +46,8 @@ def VariableVector.toBytes [ToBytes α] : VariableVector α n → Array UInt8
     let size : Array UInt8 := (Nat.toVariableBytes contents.size n).toArray
     size ++ contents
 
-
+instance [ToBytes α] : ToBytes (VariableVector α n) where
+  toBytes := VariableVector.toBytes
 
 
 abbrev Random := List UInt8 
@@ -184,9 +186,7 @@ def Extension.toBytes (ext : Extension hType) : Array UInt8 :=
 instance : ToBytes (Extension hType) where
   toBytes := Extension.toBytes
 
-def Extension.bytesize_eq (extension : Extension hType) : extension.toBytes.size = 2 + extension.extensionData.toBytes.size := by
-  simp [Extension.toBytes, Array.size]
-  induction extension.extensionType <;> simp
+
 
 
 

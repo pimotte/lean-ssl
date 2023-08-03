@@ -5,6 +5,7 @@ def UInt8.toBytes : UInt8 → Array UInt8 := fun i => #[i]
 namespace Ssl
 
 
+
 def ClientHello.toBytes : ClientHello → Array UInt8 := fun ch =>
   -- v1.2 hardcoded
   #[0x03, 0x03] 

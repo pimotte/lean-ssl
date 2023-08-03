@@ -322,5 +322,5 @@ def BinParsec.tLSPlaintext : BinParsec TLSPlaintext := do
   pure {
     type := t
     length := l
-    fragment := fragment.toArray
+    fragment := fragment
   }

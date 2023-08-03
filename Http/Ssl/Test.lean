@@ -46,6 +46,7 @@ def sendtest : IO ByteArray := do
                       dsimp [List.map, bytesize, ToBytes.toBytes]
                       dsimp [ServerName.toBytes, Array.size, VariableVector.toBytes, ToBytes.toBytes, UInt8.toBytes
                         , Char.toUInt8, Nat.toUInt8, UInt8.ofNat]
+                      sorry
                     }⟩⟩], by {
                       sorry
       -- rw [List.map, bytesize, ToBytes.toBytes]
@@ -57,19 +58,19 @@ def sendtest : IO ByteArray := do
 
   let handshake : Handshake := {
     hType := .clientHello
-    length := ⟨clientHello.toBytes.size.mod (2^24), Nat.mod_lt _ (by simp_arith) ⟩
+    length := ⟨clientHello.toBytes.length.mod (2^24), Nat.mod_lt _ (by simp_arith) ⟩
     body := clientHello
   }
 
   let plaintext : TLSPlaintext := {
     type := .handshake
-    length := handshake.toBytes.size.toUInt16
+    length := handshake.toBytes.length.toUInt16
     fragment := handshake.toBytes
   }
 
   dbg_trace plaintext.toBytes
 
-  discard $ socket.send (.mk plaintext.toBytes)
+  discard $ socket.send (.mk plaintext.toBytes.toArray)
   let bytesRecv ← socket.recv 8000
   dbg_trace String.fromUTF8Unchecked bytesRecv
   let tlsPlaintextB := BinParsec.run (BinParsec.tLSPlaintext) bytesRecv.data 
@@ -81,7 +82,7 @@ def sendtest : IO ByteArray := do
   | .ok tlsPlaintext =>
     match tlsPlaintext.type with
     | .handshake =>
-      let serverHello := BinParsec.run (BinParsec.handshake) tlsPlaintext.fragment
+      let serverHello := BinParsec.run (BinParsec.handshake) tlsPlaintext.fragment.toArray
       match serverHello with
       | .ok val =>
         dbg_trace s!"Success ServHello !"
@@ -91,7 +92,7 @@ def sendtest : IO ByteArray := do
         return bytesRecv
     | .alert => 
       -- TODO correct
-      let alert := BinParsec.run (BinParsec.alert) tlsPlaintext.fragment
+      let alert := BinParsec.run (BinParsec.alert) tlsPlaintext.fragment.toArray
       match alert with
       | .ok val =>
         dbg_trace s!"Alert: {repr val}"

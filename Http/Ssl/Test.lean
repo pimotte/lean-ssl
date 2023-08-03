@@ -2,6 +2,7 @@ import Socket
 import Http.Ssl.Handshake
 import Http.Ssl.ToBytes
 import Mathlib.Control.Random
+import Http.Ssl.Bytesize
 
 open Socket
 
@@ -43,12 +44,11 @@ def sendtest : IO ByteArray := do
     cipherSuites := ⟨[CipherSuite.TLS_AES_128_GCM_SHA256], by simp⟩
     extensions := ⟨[⟨ .supportedVersions , ⟨[SupportedVersions.tls1_3], by simp⟩⟩,
                     ⟨ .serverName , ⟨[⟨ String.toBytes "catfact.ninja".data , by simp⟩]  , by {
-                      dsimp [List.map, bytesize, ToBytes.toBytes]
-                      dsimp [ServerName.toBytes, Array.size, VariableVector.toBytes, ToBytes.toBytes, UInt8.toBytes
-                        , Char.toUInt8, Nat.toUInt8, UInt8.ofNat]
-                      sorry
+                      simp [List.map, ServerName.bytesize_eq _, VariableVector.bytesize_eq _]
                     }⟩⟩], by {
-                      sorry
+                      rw [List.map, Extension.bytesize_eq _]
+                      dsimp [VariableVector.bytesize_eq _]
+                      -- simp [List.map, ServerName.bytesize_eq _, VariableVector.bytesize_eq _]
       -- rw [List.map, bytesize, ToBytes.toBytes]
       -- unfold instToBytesExtension
       -- rw [Extension.bytesize_eq _]

@@ -28,7 +28,7 @@ abbrev VariableVector (α : Type) [ToBytes α] (lengthByteSize : Nat) := {as : L
 
 
 def List.toBytes [ToBytes α] : List α → List UInt8
-  := List.foldl (init := []) fun bs a => bs ++ ToBytes.toBytes a 
+  := List.foldr (fun a bs => bs ++ ToBytes.toBytes a) []
 
 instance [ToBytes α] : ToBytes (List α) where
   toBytes := List.toBytes
@@ -42,7 +42,7 @@ def Nat.toVariableBytes (n : Nat) (numBytes : Nat) : List UInt8 :=
 
 def VariableVector.toBytes [ToBytes α] : VariableVector α n → List UInt8
   | as =>   
-    let contents :=  as.val.foldl (init := []) fun bs a => bs ++ (@ToBytes.toBytes α) a
+    let contents :=  as.val.foldr (fun a bs => bs ++ (@ToBytes.toBytes α) a) []
     let size := (Nat.toVariableBytes contents.length n)
     size ++ contents
 

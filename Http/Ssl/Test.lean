@@ -48,7 +48,10 @@ def sendtest : IO ByteArray := do
                       rw [ServerName.bytesize_eq]
                       rw [VariableVector.bytesize_eq _]
                       simp_arith
-                    }⟩⟩], by {
+                    }⟩⟩,
+                    ⟨ .signatureAlgorithms, ⟨ [SignatureScheme.ecdsa_secp384r1_sha384], by simp⟩ ⟩,
+                    ⟨ .supportedGroups , ⟨ [NamedGroup.secp384r1], by simp⟩ ⟩
+                  ], by {
                       rw [List.map, Extension.bytesize_eq _]
                       rw [ExtensionData.bytesize_supportedversions_client_eq _]
                       rw [List.map, UInt16.bytesize_eq _]

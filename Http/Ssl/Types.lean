@@ -37,7 +37,7 @@ instance [ToBytes α] : ToBytes (List α) where
 def Nat.toVariableBytes (n : Nat) (numBytes : Nat) : List UInt8 :=
   match numBytes with
   | .zero => []
-  | .succ b => (n.toUInt64.shiftRight (8 * b).toUInt64).toUInt8 :: Nat.toVariableBytes n b
+  | .succ b => (n.shiftRight (8 * b)).toUInt8 :: Nat.toVariableBytes n b
 -- #eval Nat.toVariableBytes 5 3
 
 def VariableVector.toBytes [ToBytes α] : VariableVector α n → List UInt8
@@ -160,10 +160,62 @@ instance : ToBytes ServerName where
 
 abbrev ServerNameList := VariableVector ServerName 2
 
+abbrev SignatureScheme := UInt16
+
+def SignatureScheme.ecdsa_secp384r1_sha384 : SignatureScheme := 0x0503
+
+abbrev SignatureSchemeList := VariableVector SignatureScheme 2
+
+inductive NamedGroup
+  | secp384r1
+
+def NamedGroup.toBytes : NamedGroup → List UInt8
+  | .secp384r1 => UInt16.toBytes 0x0018
+
+instance : ToBytes NamedGroup where
+  toBytes := NamedGroup.toBytes
+
+abbrev NamedGroupList := VariableVector NamedGroup 2
+
+structure UncompressedPointRepresentation48Octets where
+  -- legacy form = 4
+  X : Nat
+  Y : Nat
+
+def UncompressedPointRepresentation48Octets.toBytes : UncompressedPointRepresentation48Octets → List UInt8 :=
+  fun upr => [4] ++ Nat.toVariableBytes upr.X 48 ++ Nat.toVariableBytes upr.Y 48
+
+instance : ToBytes UncompressedPointRepresentation48Octets where
+  toBytes := UncompressedPointRepresentation48Octets.toBytes
+
+def KeyExchange : NamedGroup → Type
+  | .secp384r1 => UncompressedPointRepresentation48Octets
+
+def KeyExchange.toBytes : KeyExchange group → List UInt8 := fun ke =>
+  match group with
+  | .secp384r1 => UncompressedPointRepresentation48Octets.toBytes ke
+
+
+
+structure KeyShareEntry where
+  group : NamedGroup
+  keyExchange : KeyExchange group
+
+def KeyShareEntry.toBytes : KeyShareEntry → List UInt8 := fun kse =>
+  kse.group.toBytes ++ kse.keyExchange.toBytes
+
+instance : ToBytes KeyShareEntry where
+  toBytes := KeyShareEntry.toBytes
+
+abbrev KeyShareClientHello := VariableVector KeyShareEntry 2
+
 def ExtensionData : ExtensionType → HandshakeType → Type
   | .supportedVersions , .clientHello => SupportedVersions
   | .supportedVersions , .serverHello => ProtocolVersion
   | .serverName , _ => ServerNameList
+  | .signatureAlgorithms , _ => SignatureSchemeList
+  | .supportedGroups , _ => NamedGroupList
+  | .keyShare , .clientHello => KeyShareClientHello
   | _, _  => VariableVector UInt8 1
 
 structure Extension (hType : HandshakeType) where
@@ -175,6 +227,9 @@ def ExtensionData.toBytes (eData : ExtensionData eType hType) : List UInt8 :=
   | .supportedVersions , .clientHello => VariableVector.toBytes eData
   | .supportedVersions , .serverHello => UInt16.toBytes eData
   | .serverName , _ => VariableVector.toBytes eData
+  | .signatureAlgorithms , _ => VariableVector.toBytes eData
+  | .supportedGroups , _ => VariableVector.toBytes eData
+  | .keyShare , .clientHello => VariableVector.toBytes eData
   | _ , _ => [1]
   let size := (Nat.toVariableBytes rawBytes.length 2)
   size ++ rawBytes

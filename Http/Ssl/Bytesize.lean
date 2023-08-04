@@ -57,13 +57,30 @@ def ServerName.bytesize_eq (servName : ServerName) : bytesize servName = 1 + byt
   simp_arith
 
 def ExtensionData.bytesize_supportedversions_client_eq 
-  (eData : ExtensionData .supportedVersions .clientHello) : bytesize eData = 1 + (eData.val.map bytesize).sum := by
+  (eData : ExtensionData .supportedVersions .clientHello) : bytesize eData = 3 + (eData.val.map bytesize).sum := by
     rw [bytesize, ToBytes.toBytes]
     unfold instToBytesExtensionData
     simp [ExtensionData.toBytes]
     simp_arith
-    rw [add_comm]
-    rw [← VariableVector.bytesize_eq]
-    rw [VariableVector.bytesize_eq _]
+    unfold bytesize
+    have h : List.length (VariableVector.toBytes eData) = 1 + (eData.val.map bytesize).sum := 
+      VariableVector.bytesize_eq eData
+    rw [h, add_comm]
+    congr
 
-  
+
+def ExtensionData.bytesize_servername_eq 
+  (eData : ExtensionData .serverName hType) : bytesize eData = 4 + (eData.val.map bytesize).sum := by
+    rw [bytesize, ToBytes.toBytes]
+    unfold instToBytesExtensionData
+    simp_arith [ExtensionData.toBytes]
+    have h : List.length (VariableVector.toBytes eData) = 2 + (eData.val.map bytesize).sum := 
+      VariableVector.bytesize_eq eData
+    rw [h, add_comm]
+
+def UInt16.bytesize_eq (i : UInt16) : bytesize i = 2 := by 
+  rw [bytesize, ToBytes.toBytes]
+  unfold instToBytesUInt16
+  simp [UInt16.toBytes]
+
+    

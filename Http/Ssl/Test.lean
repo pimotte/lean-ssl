@@ -20,12 +20,12 @@ def randVector (n : Nat) : IO (List UInt8) :=
 def Char.toUInt8 : Char → UInt8 := fun c =>
   c.toNat.toUInt8
 
-def String.toBytes : List Char → List UInt8 := fun cs =>
+def String.toBytesHelper : List Char → List UInt8 := fun cs =>
   match cs with 
   | [] => []
-  | c :: cs => Char.toUInt8 c :: String.toBytes cs
+  | c :: cs => Char.toUInt8 c :: String.toBytesHelper cs
 
-  
+def String.toBytes : List Char → List UInt8 := fun cs => (String.toBytesHelper cs).reverse 
 
 def sendtest : IO ByteArray := do
   let remoteAddr ← SockAddr.mk
@@ -44,15 +44,21 @@ def sendtest : IO ByteArray := do
     cipherSuites := ⟨[CipherSuite.TLS_AES_128_GCM_SHA256], by simp⟩
     extensions := ⟨[⟨ .supportedVersions , ⟨[SupportedVersions.tls1_3], by simp⟩⟩,
                     ⟨ .serverName , ⟨[⟨ String.toBytes "catfact.ninja".data , by simp⟩]  , by {
-                      simp [List.map, ServerName.bytesize_eq _, VariableVector.bytesize_eq _]
+                      dsimp [List.map, ServerName.bytesize_eq _, VariableVector.bytesize_eq _]
+                      rw [ServerName.bytesize_eq]
+                      rw [VariableVector.bytesize_eq _]
+                      simp_arith
                     }⟩⟩], by {
                       rw [List.map, Extension.bytesize_eq _]
-                      dsimp [VariableVector.bytesize_eq _]
-                      -- simp [List.map, ServerName.bytesize_eq _, VariableVector.bytesize_eq _]
-      -- rw [List.map, bytesize, ToBytes.toBytes]
-      -- unfold instToBytesExtension
-      -- rw [Extension.bytesize_eq _]
-      -- simp
+                      rw [ExtensionData.bytesize_supportedversions_client_eq _]
+                      rw [List.map, UInt16.bytesize_eq _]
+                      dsimp
+                      rw [Extension.bytesize_eq _]
+                      rw [ExtensionData.bytesize_servername_eq _]
+                      rw [List.map]
+                      rw [ServerName.bytesize_eq]
+                      rw [VariableVector.bytesize_eq _]
+                      simp_arith
     }⟩
   }
 

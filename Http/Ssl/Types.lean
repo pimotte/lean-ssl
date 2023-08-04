@@ -96,7 +96,8 @@ abbrev SessionId := VariableVector UInt8 1
 
 abbrev CipherSuite := List UInt8 
 
-def CipherSuite.TLS_AES_128_GCM_SHA256 : CipherSuite := [0x13,0x02]
+@[simp]
+def CipherSuite.TLS_AES_128_GCM_SHA256 : CipherSuite := [0x02,0x13]
 
 
 deriving instance ToString for CipherSuite
@@ -113,6 +114,7 @@ deriving Repr
 
 abbrev SupportedVersions := VariableVector ProtocolVersion 1
 
+@[simp]
 def SupportedVersions.tls1_3 : ProtocolVersion := 0x0304
 
 abbrev Hostname := VariableVector UInt8 2
